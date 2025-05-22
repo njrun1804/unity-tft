@@ -1,0 +1,9 @@
+# Ruff configuration for code style and linting
+[tool.ruff]
+line-length = 120
+select = ["E", "F", "W", "I", "C90", "N", "D", "UP", "YTT", "ANN", "S", "BLE", "B", "A", "COM", "C4", "DTZ", "EM", "EXE", "FA", "ISC", "ICN", "INP", "PIE", "PT", "Q", "RET", "SIM", "T20", "TID", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "TRY", "RUF"]
+ignore = ["E501"]
+
+[flake8]
+max-line-length = 120
+exclude = .git,__pycache__,.venv,venv,env,.eggs,*.egg,build,dist

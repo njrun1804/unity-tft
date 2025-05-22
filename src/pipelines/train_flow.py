@@ -4,22 +4,7 @@ import datetime
 import os
 from scipy.stats import ks_2samp
 import pandas as pd
-
-def build_dataset(df, horizon=39):
-    import numpy as np
-    df = df.dropna().reset_index().rename(columns={
-        "index": "date",
-        '1. open': 'open',
-        '2. high': 'high',
-        '3. low': 'low',
-        '4. close': 'close',
-        '5. volume': 'volume',
-    })
-    df["up_next_day"] = (df["close"].shift(-horizon) > df["close"]).astype(int)
-    df = df.dropna()
-    df["grp"] = 0  # group id for univariate
-    df["time_idx"] = np.arange(len(df))  # dense integer time_idx
-    return df
+from train_tft import preprocess_df
 
 @task
 def preprocess_data(train_path: str, val_path: str, out_train: str, out_val: str):
@@ -27,8 +12,10 @@ def preprocess_data(train_path: str, val_path: str, out_train: str, out_val: str
     logger.info("[Prefect] Preprocessing data for training and drift checks...")
     train_df = pd.read_parquet(train_path)
     val_df = pd.read_parquet(val_path)
-    train_df = build_dataset(train_df)
-    val_df = build_dataset(val_df)
+    # Use centralized preprocessing
+    params = {"predict_len": 39}  # or load from config if needed
+    train_df = preprocess_df(train_df, params)
+    val_df = preprocess_df(val_df, params)
     train_df.to_parquet(out_train)
     val_df.to_parquet(out_val)
     logger.info(f"Saved preprocessed train to {out_train}, val to {out_val}")

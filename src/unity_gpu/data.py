@@ -50,10 +50,9 @@ def make_tensor(df: pd.DataFrame):
     X = torch.tensor(feat.values, dtype=torch.float32)
     y = torch.tensor(feat["ret_pp"].shift(-1).dropna().values, dtype=torch.float32)
 
-    X = X[:-1]           # align after shift
+    X = X[:-1]  # align after shift
     SEQ_LEN = 48
-    X_seq, y_seq = [], []
-    for i in range(len(X) - SEQ_LEN):
-        X_seq.append(X[i : i + SEQ_LEN])
-        y_seq.append(y[i + SEQ_LEN])
-    return torch.stack(X_seq), torch.tensor(y_seq)
+    # Vectorized sliding window using unfold
+    X_seq = X.unfold(0, SEQ_LEN, 1)  # shape: (num_windows, SEQ_LEN, num_features)
+    y_seq = y[SEQ_LEN:]
+    return X_seq, y_seq

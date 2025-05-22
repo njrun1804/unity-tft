@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "version": "1.0",
+  "last_updated": "2025-05-21",
+  "last_validated": "2025-05-21",
+  "last_validated_by": "mikeedwards",
+  "validation_status": "passed",
+  "changelog": [
+    {
+      "date": "2025-05-21",
+      "change": "Initial production-ready config, merged prompt and rules, made fully dynamic and position-agnostic. See conversation summary for details."
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "*StockAndOptionQuote*_clean.csv",
+      "description": "Single-symbol option-chain snapshot (calls & puts)",
+      "required": true
+    },
+    {
+      "name": "*watchlist*_clean.csv",
+      "description": "Macro / peer watch-list (indices, vols, peers)",
+      "required": true
+    }
+  ],
+  "custom_fields": {},
+  "logic_version": "2025-05-21-alpha1",
+  "prompt_config": {
+    "meta": {
+      "tz": "America/New_York",
+      "analysis_horizon": "intraday-close",
+      "investment_horizon": "5-10 yr long-term",
+      "objective": "maximize risk-adjusted return (Sharpe)",
+      "portfolio_delta_target": [0.60, 0.80],
+      "portfolio_delta_target_notes": "Target range for |portfolio net Δ| ÷ (shares × 100). Uses β-weighted Δ.",
+      "option_mode": "LEG_BASED",
+      "option_mode_notes": "LEG_BASED = scale by IVR ladder, then round down to the nearest whole contract. Migration from all-or-none: 2025-05-21. See changelog for rationale. entry_price is negative for credits (received), positive for debits (paid).",
+      "roll_triggers": {
+        "notes": "These values are referenced dynamically in roll_trigger_rules using @meta.roll_triggers.* syntax."
+      },
+      "ivr_ladder": [
+        { "min": 50, "max": null, "action": { "type": "scale", "factor": 1.0 }, "rounding": "down_to_int", "notes": "When IVR ≥ 50, use full share count." }
+      ],
+      "functions_catalogue": [
+        "abs", "multiply", "divide", "subtract", "percentile", "min", "max", "if", "all", "any"
+      ],
+      "rule_precedence": ["catalyst", "delta", "extrinsic", "time"],
+      "ivr_source": {
+        "description": "IV rank is the percentile of 20-day IV versus its own 1-year history, as found in the 'IV_rank_20d' column of the watchlist.csv file."
+      },
+      "pointer_prefix": "@",
+      "pointer_note": "@path.to.value is resolved as a JSON-Pointer before evaluation"
+    },
+    "portfolio": {
+      "cash": 41352.01,
+      "equity": {
+        "cost_basis": 144914.67
+      },
+      "options": {…}
+    },
+    "options_template": { "$ref": "s3://bucket/path/to/options_template.json" },
+    "operating_logic": {
+      "position_manager_pass":
+        "For each short leg decide HOLD, ROLL, or BUY_BACK.",
+      "post_resize_guards": [
+      ],
+      "roll_trigger_rules": [
+        { "condition": { "all": [ { "left": "time_value", "op": "<", "right": { "function": "multiply", "args": [0.02, "underlying_price"] } }, { "left": { "function": "abs", "args": [ { "function": "subtract", "args": ["spot", "strike"] } ] }, "op": "<", "right": { "function": "multiply", "args": [0.02, "underlying_price"] } } ] }, "action": { "type": "ROLL" }, "notes": "Synthetic-roll fence for any near-pin ITM call.", "priority": 5 }
+      ],
+      "notes": "All roll_trigger_rules use expression objects for conditions. Dynamic references (e.g., @meta.roll_triggers.short_leg_delta_ceiling) are documented in meta. Each rule block includes a 'notes' field for maintainability. Rule order is determined by explicit 'priority' (lower = higher priority).",
+      "size_throttle_by_ivr": {
+        "note": "Scaling logic for contract size is defined in meta.ivr_ladder."
+      },
+      "rule_precedence_ref": {
+        "note": "Rule precedence order is defined in meta.rule_precedence. This is a reference only; use meta.rule_precedence for actual logic."
+      },
+      "rule_precedence_note": "Within the same class, rules fire in array order.",
+      "disaster_put_rule":
+        "Apply Sharpe-based hedge decision; default one put for every two short puts when active.",
+      "extraordinary_scan_pass": {
+        "max_contracts_per_leg": "shares"
+      },
+      "override_precedence":
+        "override_trade supersedes all other rules, but share count caps still apply.",
+      "action_json_specs": {…}
+    }
+  },
+  "meta": {
+    "catalyst_source": {
+      "type": "nasdaq_api",
+      "lookahead_days": 90
+    },
+    "live_fetcher_map": {
+      "IV_rank_52w": "finnhub.iv_rank_52w",
+      "hist_vol_10d": "finnhub.hv10d",
+      "flow_blocks": "sweepdesk.block_trades",
+      "flow_sweeps": "sweepdesk.sweeps"
+    },
+    "proxy_formulas": {
+      "atm_iv_hv_spread": "implVol - hist_vol_10d",
+      "ask_lift_pct": "asks_at_bid_size / total_flow"
+    },
+    "certainty_ladder": [
+      { "min": 0.80, "max": 1.01, "scale": 1.30, "notes": "Very high confidence: oversize a bit" },
+      { "min": 0.60, "max": 0.80, "scale": 1.00, "notes": "Base size" },
+      { "min": 0.40, "max": 0.60, "scale": 0.70, "notes": "Cut size 30 %" },
+      { "min": null, "max": 0.40, "scale": 0.40, "notes": "Low confidence: half-size or avoid" }
+    ],
+    "certainty_delta_shift": {
+      "slope": 0.30,
+      "notes": "Narrow delta target band as certainty rises; Δshift = slope × (certainty−0.5)"
+    }
+  },
+  "csv_ingest_expectations": {
+    "symbol_aliases": { "VXST": "VIX9D" },
+    "field_aliases": {
+      "implVol": ["implVol_ATM", "iv_atm"]
+    },
+    "missing_fields": "Any field may be missing or empty. Treat as 'n/a' and handle gracefully.",
+    "data_types": "Numeric fields may be strings or floats. Coerce to float if possible, else 'n/a'.",
+    "row_filtering": "Skip or flag rows with missing 'symbol' or 'last'. Process only rows with valid 'symbol' and at least one valid metric.",
+    "asset_types": "Rows may include stocks, indices, ETFs, and complex symbols (e.g., VIX, $TICK).",
+    "timezone": "All times are in America/New_York. Output as 'YYYY-MM-DD HH:MM ET'."
+  },
+  "rules": {
+    "data_ingest_rules": {
+      "max_csvs_per_run": 2,
+      "csv_files": [
+      ],
+      "load_and_validate": [
+        "Times in the files are Eastern; output all timestamps as 'YYYY-MM-DD HH:MM ET'."
+      ],
+      "merging_with_live_data": "After CSV load, run fill_missing_with_live(live_fetcher_map) so every metric that has a fetcher is populated; CSV values always win when present.",
+      "fail_safe_defaults": "If a required metric is still unavailable after live-fetch and AI lookup, compute a proxy if formula exists, else 'n/a' and append warning.",
+      "mapping_to_output_sections": [
+        {"section": 5, "description": "greeks/P&L: leg-level greeks from options.csv; mark = mid(bid,ask) unless CSV provides mark."}
+      ],
+      "performance": "Total load & parse time < 3 s; cache dataframe for reuse across sections.",
+      "roll_trigger_rules": [
+        { "condition": { "all": [ { "left": "time_value", "op": "<", "right": { "function": "multiply", "args": [0.02, "underlying_price"] } }, { "left": { "function": "abs", "args": [ { "function": "subtract", "args": ["spot", "strike"] } ] }, "op": "<", "right": { "function": "multiply", "args": [0.02, "underlying_price"] } } ] }, "action": { "type": "ROLL" }, "notes": "Synthetic-roll fence for any near-pin ITM call.", "priority": 5 }
+    }
+  }
+}
