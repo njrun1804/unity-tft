@@ -1,0 +1,12 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run Hello World",
+            "type": "shell",
+            "command": "${config:python.defaultInterpreterPath} main.py",
+            "group": "build",
+            "problemMatcher": []
+        }
+    ]
+}

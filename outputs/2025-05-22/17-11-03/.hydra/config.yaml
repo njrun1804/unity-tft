@@ -1,0 +1,17 @@
+hidden_size: 128
+lstm_layers: 2
+dropout: 0.1
+lr: 0.001
+batch_size: 512
+min_encoder_len: 48
+max_encoder_len: 48
+predict_len: 39
+early_stop_patience: 5
+num_workers: 2
+max_epochs: 30
+seed: 42
+attention_head_size: 4
+data:
+  train_csv: data/U_5min.parquet
+  val_csv: data/U_5min.parquet
+model_dir: models/test_run
