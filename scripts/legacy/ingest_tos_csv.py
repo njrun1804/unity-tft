@@ -20,8 +20,16 @@ try:
 except ImportError:
     PANDERA_AVAILABLE = False
 
+# --- LOGGING PATCH: must be at the very top ---
+parser = argparse.ArgumentParser()
+parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
+args, unknown = parser.parse_known_args()
+logging.basicConfig(
+    level=getattr(logging, args.log_level),
+    format="%(levelname)s %(message)s"
+)
+
 LOG = logging.getLogger("ingest")
-logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(levelname)s %(message)s")
 
 SCHEMAS = {
     "tos_watchlist": {
@@ -94,8 +102,11 @@ ALT_HEADER_MAP = {
         "Type": "CallPut",
         "Strike": "Strike",
         "Last": "Bid",
+        "LAST": "Bid",
         "Bid": "Bid",
+        "BID": "Bid",
         "Ask": "Ask",
+        "ASK": "Ask",
         "Volume": "Volume",
         "Open Int": "OpenInterest",
         "IV": "ImpliedVolatility",
@@ -104,6 +115,7 @@ ALT_HEADER_MAP = {
         "Theta": "Theta",
         "Vega": "Vega",
         "Rho": "Rho",
+        "Net Chng": "Net Chg",
     },
     "watchlist_custom": {
         "Symbol": "Symbol",
@@ -159,8 +171,10 @@ def robust_read_csv(path: Path, schema_key: str) -> pd.DataFrame:
                     cols = set(row)
                     if (cols >= expected) or (cols & alts):
                         header = row
+                        logging.debug(f"{path.name}: Detected header row: {header}")
                         break
                 if header is None:
+                    logging.warning(f"{path.name}: No header found in expiry chunk. Required: {expected}")
                     continue
                 # DictReader for section
                 rdr = csv.DictReader(chunk, fieldnames=header)
@@ -171,7 +185,18 @@ def robust_read_csv(path: Path, schema_key: str) -> pd.DataFrame:
                 for rec in rdr:
                     if len(rec) != len(header):
                         continue
-                    clean = {k: (None if v in ('', '<empty>') else v.replace(',', '').rstrip('%')) for k, v in rec.items()}
+                    # Defensive: handle None, strip whitespace, and clean numerics
+                    clean = {k: (None if v is None or v.strip() in ('', '<empty>') else v.strip().replace(',', '').rstrip('%')) for k, v in rec.items()}
+                    # Drop subtotal/garbage lines: require Strike, Bid, Ask to be present
+                    required_cols = ['Strike', 'Bid', 'Ask']
+                    if any((col not in clean or clean[col] is None or clean[col] == '') for col in required_cols):
+                        continue
+                    # Parse QuoteTime to datetime and store as 'timestamp'
+                    if 'QuoteTime' in clean and clean['QuoteTime']:
+                        try:
+                            clean['timestamp'] = pd.to_datetime(clean['QuoteTime'], errors='coerce', utc=True)
+                        except Exception:
+                            clean['timestamp'] = None
                     clean['expiry'] = expiry
                     rows.append(clean)
         else:
@@ -182,9 +207,10 @@ def robust_read_csv(path: Path, schema_key: str) -> pd.DataFrame:
                 cols = set(row)
                 if (cols >= expected) or (cols & alts):
                     header = row
+                    logging.debug(f"{path.name}: Detected header row: {header}")
                     break
             if header is None:
-                LOG.warning("%s: header not found", path.name)
+                logging.warning(f"{path.name}: header not found. Required: {expected}")
                 return pd.DataFrame(columns=canonical_columns(schema_key))
             rdr = csv.DictReader(lines, fieldnames=header)
             for rec in rdr:
@@ -193,7 +219,20 @@ def robust_read_csv(path: Path, schema_key: str) -> pd.DataFrame:
             for rec in rdr:
                 if len(rec) != len(header):
                     continue
-                clean = {k: (None if v in ('', '<empty>') else v.replace(',', '').rstrip('%')) for k, v in rec.items()}
+                clean = {k: (None if v is None or v.strip() in ('', '<empty>') else v.strip().replace(',', '').rstrip('%')) for k, v in rec.items()}
+                # Only apply required_cols filtering for option chain, not watchlist
+                if schema_key == "tos_option_chain":
+                    # Drop subtotal/garbage lines: require Strike, Bid, Ask to be present
+                    required_cols = ['Strike', 'Bid', 'Ask']
+                    if any((col not in clean or clean[col] is None or clean[col] == '') for col in required_cols):
+                        continue
+                # Parse QuoteTime to datetime and store as 'timestamp'
+                if 'QuoteTime' in clean and clean['QuoteTime']:
+                    try:
+                        clean['timestamp'] = pd.to_datetime(clean['QuoteTime'], errors='coerce', utc=True)
+                    except Exception:
+                        clean['timestamp'] = None
+                # Only set expiry for option chain, not watchlist
                 rows.append(clean)
     df = pd.DataFrame(rows)
     alt_type = detect_header_and_type(header) if header else None
@@ -205,6 +244,13 @@ def robust_read_csv(path: Path, schema_key: str) -> pd.DataFrame:
         df.rename(columns=alt_map, inplace=True)
     elif alt_type and alt_type in ALT_HEADER_MAP:
         df.rename(columns=ALT_HEADER_MAP[alt_type], inplace=True)
+    # --- CANONICAL RENAME MAP ---
+    RENAME = {
+        "ImpliedVolatility": "iv",
+        "OpenInterest": "oi",
+        # Add any other renames as needed
+    }
+    df.rename(columns=RENAME, inplace=True)
     df.rename(columns=SCHEMAS[schema_key], inplace=True, errors='ignore')
     # Ensure all canonical columns are present
     for col in canonical_columns(schema_key):
@@ -218,6 +264,26 @@ def robust_read_csv(path: Path, schema_key: str) -> pd.DataFrame:
         for col in ["price", "net_change", "mark_pct", "bid", "ask", "iv", "delta", "gamma", "theta", "vega", "oi", "vol", "strike"]:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
+        # --- PATCH: fill missing Greeks with 0.0 ---
+        for greek in ["gamma", "vega"]:
+            if greek in df.columns:
+                df[greek] = df[greek].fillna(0.0)
+    # Ensure every option row has `price`
+    if schema_key == "tos_option_chain":
+        import re, numpy as np
+        raw_text = path.read_text(encoding="utf-8", errors="replace")
+        if "price" not in df.columns:
+            # 1️⃣ Try to pull the underlying LAST from the header line
+            m = re.search(r"quote.*?for\s+\w+\s+on.*?[-\s](\d+\.\d+)", raw_text.splitlines()[0])
+            underlying_px = float(m.group(1)) if m else np.nan
+            # 2️⃣ Mid-price fallback when Bid/Ask present
+            bid = pd.to_numeric(df.get("bid"), errors="coerce")
+            ask = pd.to_numeric(df.get("ask"), errors="coerce")
+            mid = (bid + ask) / 2
+            df["price"] = np.where(mid.notna(), mid, underlying_px)
+    # After DataFrame creation, ensure 'timestamp' is datetime64[ns, UTC] if present
+    if 'timestamp' in df.columns:
+        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce', utc=True)
     # Pandera validation (optional)
     if PANDERA_AVAILABLE:
         try:
