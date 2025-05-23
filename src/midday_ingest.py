@@ -1,56 +1,30 @@
 #!/usr/bin/env python
 """
-midday_ingest.py – turn TOS watchlist + option chain exports
+midday_ingest.py – turn Polygon watchlist + option chain Parquet files
 into one JSON bundle ChatGPT can read.
 
 Usage:
     python src/midday_ingest.py \
-        --watchlist ~/Downloads/tos_watchlist.csv \
-        --options   ~/Downloads/tos_option_chain.csv \
-        --out       data/factors/u_midday.json
+        --out data/factors/u_midday.json
 """
 
 import json, argparse, pandas as pd
 from datetime import datetime
 from pathlib import Path
-import subprocess
-import sys
 
 # ─── IO helpers ────────────────────────────────────────────────────────────────
-def find_parquet_for_csv(csv_fp: Path, feature_store_root: Path) -> Path:
-    """Given a CSV filename, find the corresponding Parquet file in the feature store."""
-    # Infer type
-    fn = csv_fp.name.lower()
-    if "watchlist" in fn:
-        subdir = "tos_watchlist"
-    elif "optionchain" in fn or "stockandoptionquote" in fn:
-        subdir = "tos_option_chain"
-    else:
-        raise ValueError(f"Unknown CSV type for {csv_fp}")
-    # Find most recent Parquet in feature store subdir
-    fs_dir = feature_store_root / subdir
-    candidates = sorted(fs_dir.glob("*/part_*.parquet"), reverse=True)
-    if not candidates:
-        raise FileNotFoundError(f"No Parquet files found in {fs_dir}")
-    return candidates[0]
+def get_latest_parquet(folder: Path) -> Path:
+    files = sorted(folder.glob('part_*.parquet'), key=lambda f: f.stat().st_mtime, reverse=True)
+    if not files:
+        raise FileNotFoundError(f"No Parquet files found in {folder}")
+    return files[0]
 
-def load_watchlist(fp: Path, feature_store_root: Path) -> pd.DataFrame:
-    # Run robust ingest if needed
-    subprocess.run([
-        sys.executable, "scripts/ingest.py",
-        "--source-dir", str(fp.parent),
-        "--dest-root", str(feature_store_root)
-    ], check=True)
-    pq_fp = find_parquet_for_csv(fp, feature_store_root)
+def load_watchlist(feature_store_root: Path) -> pd.DataFrame:
+    pq_fp = get_latest_parquet(feature_store_root / "polygon_watchlist")
     return pd.read_parquet(pq_fp)
 
-def load_chain(fp: Path, feature_store_root: Path) -> pd.DataFrame:
-    subprocess.run([
-        sys.executable, "scripts/ingest.py",
-        "--source-dir", str(fp.parent),
-        "--dest-root", str(feature_store_root)
-    ], check=True)
-    pq_fp = find_parquet_for_csv(fp, feature_store_root)
+def load_chain(feature_store_root: Path) -> pd.DataFrame:
+    pq_fp = get_latest_parquet(feature_store_root / "polygon_option_chain")
     return pd.read_parquet(pq_fp)
 
 # ─── Feature crunching ────────────────────────────────────────────────────────
@@ -73,8 +47,8 @@ def crunch(wl: pd.DataFrame, chain: pd.DataFrame) -> dict:
 # ─── CLI ───────────────────────────────────────────────────────────────────────
 def main(args):
     feature_store_root = Path("data/feature_store")
-    wl    = load_watchlist(args.watchlist, feature_store_root)
-    chain = load_chain(args.options, feature_store_root)
+    wl    = load_watchlist(feature_store_root)
+    chain = load_chain(feature_store_root)
     blob  = crunch(wl, chain)
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
@@ -84,7 +58,5 @@ def main(args):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--watchlist", type=Path, required=True, help="Path to TOS watchlist CSV")
-    ap.add_argument("--options",   type=Path, required=True, help="Path to TOS option chain CSV")
-    ap.add_argument("--out",       type=Path, required=True, help="Output JSON path")
+    ap.add_argument("--out", type=Path, required=True, help="Output JSON path")
     main(ap.parse_args())
