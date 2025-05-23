@@ -17,3 +17,6 @@ data:
   train_csv: data/U_5min.parquet
   val_csv: data/U_5min.parquet
 model_dir: models/test_run
+paths:
+  raw_data_root: data/raw
+  feature_store_root: data/feature_store
