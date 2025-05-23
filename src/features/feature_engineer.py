@@ -88,48 +88,81 @@ class FeatureEngineer:
         return features
     
     def _calculate_technical_features(self, minute_bars: pd.DataFrame) -> Dict:
-        """Calculate technical indicators from minute bars"""
+        """Calculate technical indicators from minute bars using vectorized operations"""
         if minute_bars.empty:
             return self._default_technical_features()
         
         try:
             # Ensure we have enough data
-            if len(minute_bars) < max(self.lookback_windows):
+            max_window = max(self.lookback_windows)
+            if len(minute_bars) < max_window:
                 return self._default_technical_features()
             
-            # Calculate features for each lookback window
+            # Pre-calculate base time series once (vectorized)
+            close_prices = minute_bars['close']
+            volume = minute_bars['volume']
+            returns = close_prices.pct_change().dropna()
+            
+            # Annualization factor for volatility
+            vol_factor = np.sqrt(252 * 390)
+            
+            # Pre-calculate all rolling statistics at once using vectorized operations
             features = {}
             
-            for window in self.lookback_windows:
-                if len(minute_bars) >= window:
-                    recent_data = minute_bars.tail(window)
+            # Use pandas vectorized rolling operations for all windows simultaneously
+            valid_windows = [w for w in self.lookback_windows if len(minute_bars) >= w]
+            
+            if not valid_windows:
+                return self._default_technical_features()
+            
+            # Vectorized calculations for returns-based features
+            returns_last_idx = len(minute_bars) - 1
+            for window in valid_windows:
+                start_idx = max(0, returns_last_idx - window + 1)
+                window_returns = returns.iloc[start_idx:returns_last_idx + 1]
+                window_close = close_prices.iloc[start_idx:returns_last_idx + 1]
+                window_volume = volume.iloc[start_idx:returns_last_idx + 1]
+                
+                if len(window_returns) > 1:
+                    # Volatility features (vectorized)
+                    features[f'ewma_vol_{window}'] = window_returns.ewm(span=window//2).std().iloc[-1] * vol_factor
+                    features[f'realized_vol_{window}'] = window_returns.std() * vol_factor
+                    features[f'mean_return_{window}'] = window_returns.mean()
                     
-                    # Returns and volatility
-                    returns = recent_data['close'].pct_change().dropna()
-                    features[f'ewma_vol_{window}'] = returns.ewm(span=window//2).std() * np.sqrt(252 * 390)
-                    features[f'realized_vol_{window}'] = returns.std() * np.sqrt(252 * 390)
-                    features[f'mean_return_{window}'] = returns.mean()
+                    # Price momentum (vectorized)
+                    features[f'momentum_{window}'] = (window_close.iloc[-1] - window_close.iloc[0]) / window_close.iloc[0]
                     
-                    # Price momentum
-                    features[f'momentum_{window}'] = (recent_data['close'].iloc[-1] - recent_data['close'].iloc[0]) / recent_data['close'].iloc[0]
+                    # Volume features (vectorized)
+                    features[f'avg_volume_{window}'] = window_volume.mean()
                     
-                    # Volume features
-                    features[f'avg_volume_{window}'] = recent_data['volume'].mean()
-                    features[f'volume_trend_{window}'] = np.corrcoef(range(len(recent_data)), recent_data['volume'])[0, 1]
+                    # Volume trend using numpy correlation (more efficient)
+                    if len(window_volume) > 1:
+                        x_vals = np.arange(len(window_volume))
+                        corr_matrix = np.corrcoef(x_vals, window_volume.values)
+                        features[f'volume_trend_{window}'] = corr_matrix[0, 1] if not np.isnan(corr_matrix[0, 1]) else 0.0
+                    else:
+                        features[f'volume_trend_{window}'] = 0.0
+                
+                # Technical indicators for windows >= 20
+                if window >= 20 and len(window_close) >= 20:
+                    # Bollinger Bands (vectorized)
+                    sma_20 = window_close.rolling(20).mean()
+                    std_20 = window_close.rolling(20).std()
+                    if not pd.isna(sma_20.iloc[-1]) and std_20.iloc[-1] > 0:
+                        features[f'bb_position_{window}'] = ((window_close.iloc[-1] - sma_20.iloc[-1]) / 
+                                                           (2 * std_20.iloc[-1]))
+                    else:
+                        features[f'bb_position_{window}'] = 0.0
                     
-                    # Technical indicators
-                    if window >= 20:
-                        # Bollinger Bands
-                        sma = recent_data['close'].rolling(20).mean()
-                        std = recent_data['close'].rolling(20).std()
-                        features[f'bb_position_{window}'] = ((recent_data['close'].iloc[-1] - sma.iloc[-1]) / 
-                                                           (2 * std.iloc[-1])) if std.iloc[-1] > 0 else 0
-                        
-                        # RSI approximation
-                        gains = returns.where(returns > 0, 0).rolling(14).mean()
-                        losses = -returns.where(returns < 0, 0).rolling(14).mean()
-                        rs = gains / losses
-                        features[f'rsi_{window}'] = 100 - (100 / (1 + rs.iloc[-1])) if not np.isnan(rs.iloc[-1]) else 50
+                    # RSI approximation (vectorized)
+                    if len(window_returns) >= 14:
+                        gains = window_returns.where(window_returns > 0, 0).rolling(14).mean()
+                        losses = -window_returns.where(window_returns < 0, 0).rolling(14).mean()
+                        rs = gains / losses.replace(0, np.nan)
+                        rsi_val = 100 - (100 / (1 + rs.iloc[-1])) if not pd.isna(rs.iloc[-1]) else 50
+                        features[f'rsi_{window}'] = rsi_val
+                    else:
+                        features[f'rsi_{window}'] = 50
             
             return features
             
@@ -354,17 +387,30 @@ class FeatureEngineer:
         }
     
     def _default_technical_features(self) -> Dict:
-        """Default technical features when data is missing"""
+        """Default technical features when data is missing - vectorized generation"""
+        # Use dictionary comprehension for vectorized generation of defaults
+        feature_templates = {
+            'ewma_vol': 0.2,
+            'realized_vol': 0.2,
+            'mean_return': 0.0,
+            'momentum': 0.0,
+            'avg_volume': 1000000,
+            'volume_trend': 0.0
+        }
+        
+        # Generate all features for all windows at once
         defaults = {}
-        for window in self.lookback_windows:
-            defaults.update({
-                f'ewma_vol_{window}': 0.2,
-                f'realized_vol_{window}': 0.2,
-                f'mean_return_{window}': 0.0,
-                f'momentum_{window}': 0.0,
-                f'avg_volume_{window}': 1000000,
-                f'volume_trend_{window}': 0.0
-            })
+        for feature_name, default_value in feature_templates.items():
+            defaults.update({f'{feature_name}_{window}': default_value for window in self.lookback_windows})
+        
+        # Add additional features for windows >= 20 using vectorized generation
+        large_windows = [w for w in self.lookback_windows if w >= 20]
+        if large_windows:
+            bb_defaults = {f'bb_position_{window}': 0.0 for window in large_windows}
+            rsi_defaults = {f'rsi_{window}': 50.0 for window in large_windows}
+            defaults.update(bb_defaults)
+            defaults.update(rsi_defaults)
+        
         return defaults
     
     def _default_option_features(self) -> Dict:
