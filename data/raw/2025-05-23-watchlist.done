@@ -1,0 +1,41 @@
+Watchlist 'Macro Vol'
+
+Macro Vol
+Symbol,Last,Net Chng,Bid,Ask
+VIX,20.11,-.17,<empty>,<empty>
+VXN,16.89,0,<empty>,<empty>
+RVX,25.71,0,<empty>,<empty>
+VIX3M,22.32,0,<empty>,<empty>
+VVIX,104.10,0,<empty>,<empty>
+TNX,43.51,-.51,<empty>,<empty>
+HYG,78.97,0,78.80,79.36
+JNK,95.16,0,94.41,95.78
+UUP,27.57,0,27.44,27.45
+USO,67.14,0,67.57,67.60
+$TICK,432.00,0,<empty>,<empty>
+$TICK/Q,559.00,0,<empty>,<empty>
+BXM,2009.03,0,<empty>,<empty>
+UVXY,23.47,0,23.43,23.49
+$ADD,-135.00,0,<empty>,<empty>
+VXST,<empty>,<empty>,<empty>,<empty>
+NVDA,132.83,0,133.01,133.05
+EA,146.63,0,145.85,147.52
+MSFT,454.86,0,453.65,454.01
+U,21.86,0,21.82,21.93
+SKEW,139.04,0,<empty>,<empty>
+MOVE,.6200,0,.5500,.6196
+LQD,106.20,0,105.44,108.00
+RBLX,81.81,0,81.80,82.09
+APP,351.47,0,351.49,352.00
+META,636.57,0,636.05,636.89
+AAPL,201.36,0,201.31,201.46
+ARKK,56.38,0,56.55,57.00
+SPY,583.09,0,583.06,583.13
+/ZN[M25],110'010,+0'065,110'005,110'010
+CPC,<empty>,<empty>,<empty>,<empty>
+CPCI,<empty>,<empty>,<empty>,<empty>
+ISEE,0,0,39.94,39.95
+$PCALL,.7031,0,<empty>,<empty>
+$PCND,.5411,0,<empty>,<empty>
+$PCRL,.4279,0,<empty>,<empty>
+$PCSP,.6589,0,<empty>,<empty>

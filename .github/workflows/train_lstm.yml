@@ -1,0 +1,63 @@
+name: Train LSTM (CPU & GPU)
+
+on:
+  push:
+    paths:
+      - 'scripts/train_lstm.py'
+      - 'models/**'
+      - 'training/**'
+      - 'requirements.txt'
+      - 'Dockerfile'
+      - '.github/workflows/train_lstm.yml'
+  pull_request:
+    paths:
+      - 'scripts/train_lstm.py'
+      - 'models/**'
+      - 'training/**'
+      - 'requirements.txt'
+      - 'Dockerfile'
+      - '.github/workflows/train_lstm.yml'
+
+jobs:
+  train-lstm:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        runner: [ubuntu-latest]
+        device: [cpu, gpu]
+    env:
+      PYTHONUNBUFFERED: 1
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential git
+
+      - name: Install CUDA (GPU only)
+        if: matrix.device == 'gpu'
+        uses: Jimver/cuda-toolkit@v0.2.11
+        with:
+          cuda: '12.1.1'
+
+      - name: Install Python dependencies (CPU)
+        if: matrix.device == 'cpu'
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Python dependencies (GPU)
+        if: matrix.device == 'gpu'
+        run: |
+          pip install --upgrade pip
+          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+          pip install -r requirements.txt
+
+      - name: Run LSTM training (dry run)
+        run: |
+          python scripts/train_lstm.py --data data/train_full.parquet --test data/test.parquet --hidden_size 16 --lstm_layers 1 --dropout 0.1 --lr 1e-3 --seed 42 --epochs 1 --save_ckpt models/lstm_best_epoch50.pt --metrics_out models/lstm_best_metrics.json

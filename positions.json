@@ -12,16 +12,9 @@
     }
   ],
   "dependencies": [
-    {
-      "name": "*StockAndOptionQuote*_clean.csv",
-      "description": "Single-symbol option-chain snapshot (calls & puts)",
-      "required": true
-    },
-    {
-      "name": "*watchlist*_clean.csv",
-      "description": "Macro / peer watch-list (indices, vols, peers)",
-      "required": true
-    }
+    { "name": "*options*_raw.parquet",  "description": "Option-chain snapshot", "required": true },
+    { "name": "*watchlist*_raw.parquet", "description": "Macro / peer watch-list", "required": true },
+    { "name": "*predictions*.parquet",  "description": "TFT ensemble forecast",   "required": false }
   ],
   "custom_fields": {},
   "logic_version": "2025-05-21-alpha1",
@@ -111,17 +104,7 @@
       "notes": "Narrow delta target band as certainty rises; Δshift = slope × (certainty−0.5)"
     }
   },
-  "csv_ingest_expectations": {
-    "symbol_aliases": { "VXST": "VIX9D" },
-    "field_aliases": {
-      "implVol": ["implVol_ATM", "iv_atm"]
-    },
-    "missing_fields": "Any field may be missing or empty. Treat as 'n/a' and handle gracefully.",
-    "data_types": "Numeric fields may be strings or floats. Coerce to float if possible, else 'n/a'.",
-    "row_filtering": "Skip or flag rows with missing 'symbol' or 'last'. Process only rows with valid 'symbol' and at least one valid metric.",
-    "asset_types": "Rows may include stocks, indices, ETFs, and complex symbols (e.g., VIX, $TICK).",
-    "timezone": "All times are in America/New_York. Output as 'YYYY-MM-DD HH:MM ET'."
-  },
+  "file_ingest_expectations": {},
   "rules": {
     "data_ingest_rules": {
       "max_csvs_per_run": 2,
@@ -138,6 +121,22 @@
       "performance": "Total load & parse time < 3 s; cache dataframe for reuse across sections.",
       "roll_trigger_rules": [
         { "condition": { "all": [ { "left": "time_value", "op": "<", "right": { "function": "multiply", "args": [0.02, "underlying_price"] } }, { "left": { "function": "abs", "args": [ { "function": "subtract", "args": ["spot", "strike"] } ] }, "op": "<", "right": { "function": "multiply", "args": [0.02, "underlying_price"] } } ] }, "action": { "type": "ROLL" }, "notes": "Synthetic-roll fence for any near-pin ITM call.", "priority": 5 }
+      ]
+    }
+  },
+  "sizing": {
+    "base_size": 100,
+    "max_size": 500,
+    "sharpe_target": 1.5,
+    "min_sharpe": 0.8,
+    "delta_sharpe": 0.2,
+    "cash_budget": 100000,
+    "wheel": {
+      "min_premium_yield": 0.01,
+      "min_DTE": 7,
+      "max_DTE": 45,
+      "min_wheel_sharpe": 1.0,
+      "capital_at_risk_limit": 0.25
     }
   }
 }

@@ -1,4 +1,7 @@
 import ray.tune as tune
+from ray.tune import Checkpoint
+import tempfile, os, torch
+from training.checkpoint_utils import save_ckpt
 from ray.tune.search.optuna import OptunaSearch
 from pathlib import Path
 import pandas as pd, hydra
@@ -9,7 +12,7 @@ def objective(config):
     train_df = pd.read_parquet(config["train_csv"])
     val_df   = pd.read_parquet(config["val_csv"])
     score = train_once(train_df, val_df, config, Path(config["model_dir"]))
-    tune.report(val_loss=score)
+    tune.report({"val_loss": score}, checkpoint=save_ckpt(model=None))  # model can be None if not used
 
 search_space = {
     "hidden_size": tune.choice([64, 96, 128]),

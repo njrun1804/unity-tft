@@ -210,7 +210,14 @@ def robust_read_csv(path: Path, schema_key: str) -> pd.DataFrame:
     for col in canonical_columns(schema_key):
         if col not in df.columns:
             df[col] = None
+    # Remove duplicate columns (e.g., expiry)
+    df = df.loc[:, ~df.columns.duplicated()]
     df = df[canonical_columns(schema_key)]
+    # Convert numerics for watchlist and option chain
+    if schema_key in ("tos_watchlist", "tos_option_chain"):
+        for col in ["price", "net_change", "mark_pct", "bid", "ask", "iv", "delta", "gamma", "theta", "vega", "oi", "vol", "strike"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
     # Pandera validation (optional)
     if PANDERA_AVAILABLE:
         try:
@@ -242,21 +249,47 @@ def process_one(args):
         if df.empty:
             LOG.warning("%s: no valid data, skipping.", csv_path.name)
             return
+        # Guarantee ticker column exists – infer from filename if absent
+        from src.utils.preprocess import preprocess_df
+        df = preprocess_df(df, source_path=csv_path)
+        # --- Wheel metrics for options chain ---
+        if src == "tos_option_chain":
+            import numpy as np
+            df["DTE"] = (pd.to_datetime(df["expiry"]) - pd.to_datetime(df["timestamp"]))
+            df["DTE"] = df["DTE"].dt.days
+            df["premium_yield"] = df["bid"] / df["strike"] / df["DTE"] * 365
+            df["capital_at_risk"] = df["strike"] * 100
+            df["wheel_sharpe"] = df["premium_yield"] / (df["iv"] * np.sqrt(252))
         write_partitioned_arrow(df, dest_root / src, src)
         shutil.move(csv_path, csv_path.with_suffix(".done"))
         LOG.info("%s → %s/", csv_path.name, src)
     except Exception as e:
         LOG.error("Failed to ingest %s: %s", csv_path.name, e)
 
+def find_csv_files(source_dir: Path) -> list[Path]:
+    """Return all CSV files in the source directory."""
+    return sorted(source_dir.glob("*.csv"))
+
+def cleanup_processed_files(source_dir: Path):
+    """Remove all .done files in the source directory."""
+    for f in source_dir.glob("*.done"):
+        try:
+            f.unlink()
+            LOG.info("Deleted processed file: %s", f)
+        except Exception as e:
+            LOG.warning("Could not delete %s: %s", f, e)
+
 def ingest(source_dir: Path, dest_root: Path, log_level="INFO") -> None:
+    """Ingest all CSVs in source_dir to Parquet feature store at dest_root."""
     LOG.setLevel(getattr(logging, log_level.upper(), logging.INFO))
-    csv_files = sorted(source_dir.glob("*.csv"))
+    csv_files = find_csv_files(source_dir)
     if not csv_files:
         LOG.info("No CSV files found; nothing to ingest.")
         return
     with ProcessPoolExecutor() as executor:
         for _ in executor.map(process_one, [(csv_path, dest_root) for csv_path in csv_files]):
             pass
+    cleanup_processed_files(source_dir)
 
 def infer_source(filename: str) -> str | None:
     fn = filename.lower()
@@ -269,9 +302,13 @@ def infer_source(filename: str) -> str | None:
     return None
 
 if __name__ == "__main__":
-    p = argparse.ArgumentParser()
-    p.add_argument("--source-dir", default="data/raw")
-    p.add_argument("--dest-root", default="data/feature_store")
-    p.add_argument("--log-level", default="INFO")
+    p = argparse.ArgumentParser(description="Robust TOS CSV → Parquet ingester.")
+    p.add_argument("--source-dir", default="data/raw", help="Directory with raw TOS CSVs")
+    p.add_argument("--dest-root", default="data/feature_store", help="Output Parquet feature store root")
+    p.add_argument("--log-level", default="INFO", help="Logging level")
     args = p.parse_args()
     ingest(Path(args.source_dir), Path(args.dest_root), log_level=args.log_level)
+
+# 2. mu_news in news/risk pipeline (example, to be placed in your news ETL aggregation step):
+# agg["mu_news"] = agg["sentiment_score"] * agg["decay_weight"]
+# Make sure this is saved to Parquet in your news/risk ETL.

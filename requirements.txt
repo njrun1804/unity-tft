@@ -1,14 +1,2 @@
-pip-requirements
-ray
-ray[tune]
-torch==2.2.*
-torchvision
-torchtext
-lightning==2.2.*
-pytorch-forecasting
-flash-attn
-torch-geometric>=2.6
-duckdb>=0.9
-lightning>=2.2
-lightgbm>=4.3
-optuna>=3.6
+pandas>=2.2
+typer>=0.9

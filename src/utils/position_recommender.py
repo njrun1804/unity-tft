@@ -1,5 +1,9 @@
 import json
 from pathlib import Path
+import pandas as pd
+from metrics.sharpe_forecaster import AlphaInputs, ex_ante_sharpe
+from decision.strategy_selector import EquityMetrics, WheelMetrics, pick_strategy
+import numpy as np
 
 
 def load_positions_config(config_path=None):
@@ -22,7 +26,6 @@ def _scale_from_ladder(cert, ladder):
 
 
 def recommend_positions(predictions, certainty, config=None):
-    import numpy as np
     if config is None:
         config = load_positions_config()
     meta = config.get("meta", {})
@@ -59,3 +62,48 @@ def recommend_positions(predictions, certainty, config=None):
 def save_recommendations(recommendations, out_path):
     with open(out_path, "w") as f:
         json.dump(recommendations, f, indent=2)
+
+
+def recommend_size(row, cfg, ts):
+    # Sharpe for equity
+    inputs = AlphaInputs(
+        mu_tft=row["mu_tft"],
+        mu_skew=row["mu_skew"],
+        mu_news=row["mu_news"],
+        ewma_vol=row["ewma_vol"],
+        tft_p10=row.get("tft_p10"),
+        tft_p90=row.get("tft_p90"),
+    )
+    S_eq = ex_ante_sharpe(inputs, ts)
+    # --- wheel metrics ---
+    S_wh = row["wheel_sharpe"]
+    wheel = WheelMetrics(
+        premium_yield=row["premium_yield"],
+        delta=row["delta"],
+        sigma_hat=row["ewma_vol"],
+        capital_at_risk=row["capital_at_risk"],
+        sharpe=S_wh,
+    )
+    strategy = pick_strategy(
+        EquityMetrics(row["mu_tft"], row["ewma_vol"], S_eq),
+        wheel,
+        cfg,
+    )
+    if strategy == "EQUITY":
+        tgt = cfg.base_size * S_eq / cfg.sharpe_target
+    elif strategy == "WHEEL":
+        tgt = 0.0    # equity leg handled via wheel
+    else:
+        tgt = 0.0
+    tgt = float(np.clip(tgt, -cfg.max_size, cfg.max_size))
+    return dict(
+        ticker=row["ticker"],
+        strategy=strategy,
+        sharpe_equity=S_eq,
+        sharpe_wheel=S_wh,
+        target_w=tgt,
+    )
+
+
+cache_path = Path("path_to_your_parquet_file.parquet")
+df_cache = pd.read_parquet(cache_path)

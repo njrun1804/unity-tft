@@ -52,7 +52,7 @@ def make_tensor(df: pd.DataFrame):
 
     X = X[:-1]  # align after shift
     SEQ_LEN = 48
-    # Vectorized sliding window using unfold
-    X_seq = X.unfold(0, SEQ_LEN, 1)  # shape: (num_windows, SEQ_LEN, num_features)
+    # Vectorized sliding window using unfold, then permute to (windows, seq_len, features)
+    X_seq = X.unfold(0, SEQ_LEN, 1).permute(0, 2, 1)  # shape: (num_windows, SEQ_LEN, num_features)
     y_seq = y[SEQ_LEN:]
     return X_seq, y_seq

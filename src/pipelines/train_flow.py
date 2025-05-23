@@ -4,7 +4,16 @@ import datetime
 import os
 from scipy.stats import ks_2samp
 import pandas as pd
-from train_tft import preprocess_df
+from src.utils.preprocess import preprocess_df
+from pathlib import Path
+
+RAW_DIR = Path("data/raw")
+FEATURE_ROOT = Path("data/feature_store")
+
+@task(retries=2, retry_delay_seconds=30)
+def ingest_raw():
+    cmd = ["python", "scripts/ingest.py", "--source-dir", str(RAW_DIR), "--dest-root", str(FEATURE_ROOT)]
+    subprocess.run(cmd, check=True)
 
 @task
 def preprocess_data(train_path: str, val_path: str, out_train: str, out_val: str):
@@ -12,10 +21,15 @@ def preprocess_data(train_path: str, val_path: str, out_train: str, out_val: str
     logger.info("[Prefect] Preprocessing data for training and drift checks...")
     train_df = pd.read_parquet(train_path)
     val_df = pd.read_parquet(val_path)
-    # Use centralized preprocessing
-    params = {"predict_len": 39}  # or load from config if needed
-    train_df = preprocess_df(train_df, params)
-    val_df = preprocess_df(val_df, params)
+    # Use centralized preprocessing with ticker guarantee
+    train_df = preprocess_df(pd.read_parquet(train_path), source_path=train_path)
+    val_df = preprocess_df(pd.read_parquet(val_path), source_path=val_path)
+    # Log columns and abort if ticker missing
+    for name, df in [("train", train_df), ("val", val_df)]:
+        logger.info(f"{name} columns: {list(df.columns)}")
+        if "ticker" not in df.columns:
+            logger.error(f"{name} set missing 'ticker' column!")
+            raise ValueError(f"{name} set missing 'ticker' column!")
     train_df.to_parquet(out_train)
     val_df.to_parquet(out_val)
     logger.info(f"Saved preprocessed train to {out_train}, val to {out_val}")
@@ -116,5 +130,40 @@ def tft_training_flow():
         notify_failure()
         raise e
 
+@flow(name="unity_e2e")
+def unity_e2e_flow():
+    try:
+        ingest_raw()
+        pre_train, pre_val = preprocess_data(
+            train_path="data/U_5min.parquet",
+            val_path="data/U_5min.parquet",
+            out_train="data/pre_train.parquet",
+            out_val="data/pre_val.parquet"
+        )
+        drift_ok = check_drift(
+            train_path=pre_train,
+            new_path=pre_val,
+            feature="close",
+            alpha=0.01
+        )
+        if not drift_ok:
+            get_run_logger().warning("Drift detected, but continuing with training (customize as needed)")
+        import shutil
+        shutil.copy(pre_train, "data/U_5min.parquet")
+        run_training()
+        log_artifacts()
+        notify_success()
+    except Exception as e:
+        notify_failure()
+        raise e
+
 if __name__ == "__main__":
     tft_training_flow()
+    # Creates a deployment called "unity_e2e_dev" and runs it hourly.
+    # Change the cron or interval as you like.
+    from datetime import timedelta
+
+    unity_e2e_flow.serve(
+        name="unity_e2e_dev",
+        interval=timedelta(hours=1),      # ← or cron="0 * * * *"
+    )

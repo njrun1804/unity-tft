@@ -1,0 +1,92 @@
+Failure # 1 (occurred at 2025-05-22_21-10-58)
+[36mray::ImplicitFunc.train()[39m (pid=65256, ip=127.0.0.1, actor_id=507aa701f62b8215e6bd1a3902000000, repr=objective)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/tune/trainable/trainable.py", line 330, in train
+    raise skipped from exception_cause(skipped)
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/air/_internal/util.py", line 107, in run
+    self._ret = self._target(*self._args, **self._kwargs)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/tune/trainable/function_trainable.py", line 45, in <lambda>
+    training_func=lambda: self._trainable_func(self.config),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/tune/trainable/function_trainable.py", line 261, in _trainable_func
+    output = fn()
+             ^^^^
+  File "/Users/mikeedwards/Library/Mobile Documents/com~apple~CloudDocs/pMike/Unity/price/run_optuna.py", line 55, in objective
+    tune.report(loss=loss)                        # every trial must report!
+    ^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/train/_internal/session.py", line 663, in wrapper
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+TypeError: report() got an unexpected keyword argument 'loss'
+Failure # 2 (occurred at 2025-05-22_21-11-36)
+[36mray::ImplicitFunc.train()[39m (pid=65423, ip=127.0.0.1, actor_id=901aa87b735120ec32458b9102000000, repr=objective)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/tune/trainable/trainable.py", line 330, in train
+    raise skipped from exception_cause(skipped)
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/air/_internal/util.py", line 107, in run
+    self._ret = self._target(*self._args, **self._kwargs)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/tune/trainable/function_trainable.py", line 45, in <lambda>
+    training_func=lambda: self._trainable_func(self.config),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/tune/trainable/function_trainable.py", line 261, in _trainable_func
+    output = fn()
+             ^^^^
+  File "/Users/mikeedwards/Library/Mobile Documents/com~apple~CloudDocs/pMike/Unity/price/run_optuna.py", line 55, in objective
+    tune.report(loss=loss)                        # every trial must report!
+    ^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/train/_internal/session.py", line 663, in wrapper
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+TypeError: report() got an unexpected keyword argument 'loss'
+Failure # 3 (occurred at 2025-05-22_21-12-08)
+[36mray::ImplicitFunc.train()[39m (pid=65620, ip=127.0.0.1, actor_id=c774a0357f0bec480f25e5cb02000000, repr=objective)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/tune/trainable/trainable.py", line 330, in train
+    raise skipped from exception_cause(skipped)
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/air/_internal/util.py", line 107, in run
+    self._ret = self._target(*self._args, **self._kwargs)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/tune/trainable/function_trainable.py", line 45, in <lambda>
+    training_func=lambda: self._trainable_func(self.config),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/tune/trainable/function_trainable.py", line 261, in _trainable_func
+    output = fn()
+             ^^^^
+  File "/Users/mikeedwards/Library/Mobile Documents/com~apple~CloudDocs/pMike/Unity/price/run_optuna.py", line 55, in objective
+    tune.report(loss=loss)                        # every trial must report!
+    ^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/train/_internal/session.py", line 663, in wrapper
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+TypeError: report() got an unexpected keyword argument 'loss'
+Failure # 4 (occurred at 2025-05-22_21-12-32)
+[36mray::ImplicitFunc.train()[39m (pid=65804, ip=127.0.0.1, actor_id=e730d0bf4e6d61a587e8584802000000, repr=objective)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/tune/trainable/trainable.py", line 330, in train
+    raise skipped from exception_cause(skipped)
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/air/_internal/util.py", line 107, in run
+    self._ret = self._target(*self._args, **self._kwargs)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/tune/trainable/function_trainable.py", line 45, in <lambda>
+    training_func=lambda: self._trainable_func(self.config),
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/tune/trainable/function_trainable.py", line 261, in _trainable_func
+    output = fn()
+             ^^^^
+  File "/Users/mikeedwards/Library/Mobile Documents/com~apple~CloudDocs/pMike/Unity/price/run_optuna.py", line 55, in objective
+    tune.report(loss=loss)                        # every trial must report!
+    ^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Caskroom/miniconda/base/envs/py311ray/lib/python3.11/site-packages/ray/train/_internal/session.py", line 663, in wrapper
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+TypeError: report() got an unexpected keyword argument 'loss'
