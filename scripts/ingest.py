@@ -15,8 +15,8 @@ import pyarrow.parquet as pq
 
 LOG = logging.getLogger("ingest")
 
-# Remove all TOS/CSV schemas and logic
-# Only keep risk schema if still needed elsewhere
+# Core data ingestion schemas
+# Focus on modern Polygon API-based data pipeline
 SCHEMAS = {
     "tft_risk": {
         "timestamp": "timestamp",
@@ -44,6 +44,6 @@ def write_partitioned_arrow(df: pd.DataFrame, dest_dir: Path, schema_key: str, p
     out_dir.mkdir(parents=True, exist_ok=True)
     pq.write_table(table, out_dir / f"part_{hashval}.parquet", compression="zstd")
 
-# Remove all CSV/legacy ingest logic and CLI
+# Modern Parquet-based ingestion entry point
 if __name__ == "__main__":
-    print("This script no longer ingests CSVs. Use scripts/polygon_ingest.py for all data ingestion.")
+    print("Modern data ingestion uses Polygon API. See scripts/automate_pipeline.py for automated data collection.")

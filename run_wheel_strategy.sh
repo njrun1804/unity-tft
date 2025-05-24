@@ -190,17 +190,6 @@ run_tests() {
     log_info "Coverage report: htmlcov/index.html"
 }
 
-# Legacy midday workflow
-run_midday() {
-    log_info "Running legacy midday workflow..."
-    
-    OUTPUT_FILE="${2:-data/factors/u_midday.json}"
-    
-    $PYTHON_BIN src/midday_ingest.py --out "$OUTPUT_FILE"
-    
-    log_info "✅ Midday analysis completed: $OUTPUT_FILE"
-}
-
 # Market status check
 check_market_status() {
     log_info "Checking market status..."
@@ -232,7 +221,6 @@ MODES:
     backtest      Run historical backtest
     train         Train TFT model
     test          Run test suite
-    midday        Legacy midday workflow
     status        Check market status
     help          Show this help
 
@@ -254,9 +242,6 @@ EXAMPLES:
     
     # Train with optimization
     ./run_wheel_strategy.sh train --optimize
-    
-    # Legacy workflow
-    ./run_wheel_strategy.sh midday
 
 SAFETY:
     - Start with paper trading to validate signals
@@ -298,12 +283,6 @@ main() {
             check_prerequisites
             install_dependencies
             run_tests "$@"
-            ;;
-        "midday")
-            check_prerequisites
-            install_dependencies
-            setup_directories
-            run_midday "$@"
             ;;
         "status")
             check_market_status

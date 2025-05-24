@@ -15,6 +15,7 @@ import logging
 from tenacity import retry, stop_after_attempt, wait_exponential
 import pyarrow as pa
 import pyarrow.parquet as pq
+from src.utils.decorators import async_retry
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +174,33 @@ class PolygonDataFetcher:
             logger.error(f"Failed to fetch option chain for {ticker}: {e}")
             return []
 
+    def validate_data(self, df: pd.DataFrame) -> Tuple[bool, List[str]]:
+        """Validate fetched data for quality issues"""
+        issues = []
+        # Check for missing data
+        if df.isnull().any().any():
+            issues.append("Missing data detected")
+        # Check for zero/negative prices
+        if (df[['open', 'high', 'low', 'close']] <= 0).any().any():
+            issues.append("Invalid price data (zero or negative)")
+        # Check for price consistency (high >= low, etc.)
+        if (df['high'] < df['low']).any():
+            issues.append("High < Low detected")
+        if (df['high'] < df['close']).any() or (df['low'] > df['close']).any():
+            issues.append("Close price outside high/low range")
+        # Check for volume spikes (potential bad data)
+        volume_mean = df['volume'].mean()
+        volume_std = df['volume'].std()
+        if (df['volume'] > volume_mean + 10 * volume_std).any():
+            issues.append("Abnormal volume spike detected")
+        # Check for time gaps
+        time_diff = df.index.to_series().diff()
+        expected_diff = pd.Timedelta(minutes=5)  # Assuming 5-min bars
+        if (time_diff > expected_diff * 2).any():
+            issues.append("Time gaps in data detected")
+        is_valid = len(issues) == 0
+        return is_valid, issues
+
     async def fetch_minute_bars(self, ticker: str, lookback_days: int = 5):
         """Fetch historical minute bars"""
         end_date = datetime.now().date()
@@ -208,7 +236,10 @@ class PolygonDataFetcher:
             df = pd.DataFrame(bars)
             if not df.empty:
                 df = df.set_index('timestamp').sort_index()
-            
+                is_valid, issues = self.validate_data(df)
+                if not is_valid:
+                    logger.warning(f"Data validation issues for {ticker}: {issues}")
+                    # Decide whether to proceed or raise exception
             logger.info(f"Fetched {len(df)} minute bars for {ticker}")
             return df
             
@@ -330,7 +361,13 @@ class PolygonDataFetcher:
                 ("ask", pa.float64()),
                 ("iv", pa.float64()),
                 ("delta", pa.float64()),
-                ("price", pa.float64())
+                ("gamma", pa.float64()),
+                ("theta", pa.float64()),
+                ("vega", pa.float64()),
+                ("volume", pa.int64()),
+                ("open_interest", pa.int64()),
+                ("price", pa.float64()),
+                ("dte", pa.int64())
             ])
         else:
             schema = None  # Let pandas infer for minute bars
@@ -348,6 +385,14 @@ class PolygonDataFetcher:
             df.to_parquet(fname, compression="zstd")
         
         logger.info(f"Wrote {len(df)} rows to {fname}")
+    
+    @async_retry(max_attempts=3, delay=1.0, backoff=2.0)
+    async def fetch_data(self, ticker: str, timespan: str = '5minute') -> pd.DataFrame:
+        """Generic async fetch method with retry logic."""
+        # This method serves as a template for additional data fetching endpoints
+        logger.info(f"Fetching data for {ticker} with timespan {timespan}")
+        await asyncio.sleep(0.1)
+        return pd.DataFrame()
 
 async def fetch_and_save_data(ticker: str, api_key: str):
     """Convenience function for single ticker fetching"""

@@ -51,8 +51,30 @@ def run_training():
 @task
 def log_artifacts():
     logger = get_run_logger()
-    logger.info("[Prefect] Logging artifacts (placeholder, handled by MLflow in train_tft.py)")
-    # Optionally, copy or register artifacts elsewhere
+    logger.info("[Prefect] Logging training artifacts...")
+    
+    # Copy model artifacts to a standard location for deployment
+    from pathlib import Path
+    import shutil
+    
+    artifacts_dir = Path("outputs/training_artifacts")
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Copy TFT model checkpoints if they exist
+    model_dir = Path("models/tft")
+    if model_dir.exists():
+        for ckpt_file in model_dir.glob("*.ckpt"):
+            shutil.copy2(ckpt_file, artifacts_dir / ckpt_file.name)
+            logger.info(f"Copied {ckpt_file.name} to artifacts directory")
+    
+    # Copy training logs
+    logs_dir = Path("lightning_logs")
+    if logs_dir.exists():
+        latest_version = max(logs_dir.glob("version_*"), default=None, key=lambda x: x.stat().st_mtime)
+        if latest_version:
+            shutil.copytree(latest_version, artifacts_dir / "latest_logs", dirs_exist_ok=True)
+            logger.info("Copied latest training logs to artifacts directory")
+    
     return True
 
 @task

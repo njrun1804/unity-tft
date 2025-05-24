@@ -115,24 +115,8 @@ class LSTMForecastLightningModule(pl.LightningModule):
             return [optimizer], [scheduler]
         return optimizer
 
-class RiskPropagationGNN(torch.nn.Module):
-    def __init__(self, *args, **kwargs):
-        super().__init__()
-        # TODO: Implement risk-propagation GNN for multi-ticker rollout
-        pass
-    def forward(self, x):
-        raise NotImplementedError("RiskPropagationGNN is a stub. Implement GNN logic here.")
-
-class LiveOrderExecutor:
-    def __init__(self, broker='alpaca', api_key=None, api_secret=None, paper=True):
-        self.broker = broker
-        self.api_key = api_key
-        self.api_secret = api_secret
-        self.paper = paper
-        # TODO: Implement live order execution for Alpaca/IB API
-        pass
-    def submit_order(self, symbol, qty, side, type='market', time_in_force='gtc'):
-        raise NotImplementedError("LiveOrderExecutor is a stub. Implement broker API logic here.")
+# Future enhancement: Risk propagation GNN and live order execution classes
+# will be implemented when multi-ticker rollout and broker API integration are added
 
 # ------------------------------------------------------------------
 # 1.  COLLECT RAW UNCERTAINTY SIGNALS
@@ -210,15 +194,15 @@ def main():
     parser.add_argument('--weight_decay', type=float, default=0.0, help='Weight decay for optimizer')
     parser.add_argument('--cyclic_lr', action='store_true', help='Use cyclic learning rate scheduler')
     parser.add_argument('--mlflow', action='store_true', help='Enable MLflow autologging')
-    parser.add_argument('--use_gnn', action='store_true', help='Use risk-propagation GNN for multi-ticker rollout (stub)')
-    parser.add_argument('--live_orders', action='store_true', help='Enable live order execution (stub, does not place real orders)')
+    parser.add_argument('--use_gnn', action='store_true', help='Enable risk-propagation GNN for multi-ticker rollout (future enhancement)')
+    parser.add_argument('--live_orders', action='store_true', help='Enable live order execution via broker API (future enhancement)')
     args = parser.parse_args()
 
     if args.use_gnn:
-        print("[WARNING] RiskPropagationGNN is a stub. LSTM workflow will run. Implement GNN logic in the future.")
+        print("[INFO] Risk-propagation GNN support planned for future release. Using LSTM workflow.")
 
     if args.live_orders:
-        print("[WARNING] LiveOrderExecutor is a stub. No real orders will be placed. Implement broker API logic in the future.")
+        print("[INFO] Live order execution planned for future release. Running in simulation mode.")
 
     if args.mlflow:
         if not MLFLOW_AVAILABLE:

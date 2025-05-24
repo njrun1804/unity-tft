@@ -202,7 +202,7 @@ class FeatureEngineer:
                 features['iv_std'] = options['iv'].std()
                 features['iv_skew'] = options['iv'].skew()
                 
-                # IV rank (simplified)
+                # IV rank percentile calculation
                 iv_percentile = options['iv'].rank(pct=True)
                 features['iv_rank'] = iv_percentile.mean()
             

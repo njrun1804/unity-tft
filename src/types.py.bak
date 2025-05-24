@@ -1,0 +1,28 @@
+# This file has been renamed to trading_types.py to avoid shadowing the standard library 'types' module.
+# Please update your imports to use 'from src.trading_types import ...'
+
+from typing import TypedDict, Literal, Optional
+from datetime import datetime
+
+class PositionDict(TypedDict):
+    type: Literal['call', 'put']
+    strike: float
+    expiry: str
+    quantity: int
+    entry_price: float
+    current_price: float
+    pnl: float
+    
+class OrderDict(TypedDict):
+    ticker: str
+    action: Literal['buy', 'sell']
+    quantity: int
+    order_type: Literal['market', 'limit']
+    limit_price: Optional[float]
+    
+class GreeksDict(TypedDict):
+    delta: float
+    gamma: float
+    vega: float
+    theta: float
+    rho: float

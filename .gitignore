@@ -72,7 +72,6 @@ Pipfile.lock
 *.parquet
 *.pt
 *.csv
-/data/factors/*_midday.json
 
 # Logs
 logs/

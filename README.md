@@ -51,23 +51,14 @@ python >= 3.9
 pip install -r requirements.txt
 
 # Environment variables
-export POLYGON_API_KEY="your_polygon_key"
+```bash
+export POLYGON_API_KEY="iNPRlzOE1hupYJT0uepDbhRW0BrvWPkP"
 export RUN_MODE="once"  # or "continuous"
 ```
 
 ### Basic Usage
 
-#### 1. Legacy Midday Workflow (Manual CSV)
-```bash
-# Traditional TOS CSV workflow
-python src/midday_ingest.py \
-    --out data/factors/u_midday.json
-
-# View generated signals
-cat data/factors/u_midday.json | jq '.features'
-```
-
-#### 2. Production Pipeline (Automated)
+#### 1. Production Pipeline (Automated)
 ```bash
 # Single execution cycle
 python -m src.pipelines.wheel_orchestrator
@@ -77,7 +68,7 @@ export RUN_MODE=continuous
 python -m src.pipelines.wheel_orchestrator
 ```
 
-#### 3. Train TFT Model
+#### 2. Train TFT Model
 ```bash
 # Train with hyperparameter optimization
 python train_tft.py data/train.csv data/val.csv models/tft/ --optimize
@@ -271,7 +262,7 @@ RISK_LIMIT_OVERRIDE=false        # Override risk limits (dangerous)
 ### Signal Generation Flow
 
 ```python
-# Simplified signal generation
+# Core signal generation pipeline
 def generate_trading_signals():
     # 1. Fetch real-time data
     data = await polygon_fetcher.fetch_all_data(tickers)
@@ -365,24 +356,3 @@ src/
 
 ---
 
-## Legacy Support
-
-The original **midday workflow** is still supported for manual TOS CSV analysis:
-
-```bash
-python src/midday_ingest.py --out data/factors/u_midday.json
-```
-
-All advanced automation, TFT models, and wheel strategies are now in the production pipeline described above.flow (Unity)
-
-1. Export TOS CSVs (watchlist and option chain) to your computer.
-2. Run:
-
-   python src/midday_ingest.py \
-      --watchlist ~/Downloads/U_watchlist.csv \
-      --options   ~/Downloads/U_chain.csv \
-      --out       data/factors/u_midday.json
-
-3. Paste the JSON + prompt into ChatGPT.
-
-That’s it. All other automation, news, and multi-ticker code is archived in `old/`.

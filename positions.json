@@ -1,21 +1,140 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
-  "version": "1.0",
-  "last_updated": "2025-05-21",
-  "last_validated": "2025-05-21",
+  "version": "1.1",
+  "last_updated": "2025-05-23",
+  "last_validated": "2025-05-23",
   "last_validated_by": "mikeedwards",
   "validation_status": "passed",
   "changelog": [
     {
+      "date": "2025-05-23",
+      "change": "Enhanced config to support full Unity Price Trading System features"
+    },
+    {
       "date": "2025-05-21",
-      "change": "Initial production-ready config, merged prompt and rules, made fully dynamic and position-agnostic. See conversation summary for details."
+      "change": "Initial production-ready config, merged prompt and rules, made fully dynamic and position-agnostic"
     }
   ],
   "dependencies": [
-    { "name": "*options*_raw.parquet",  "description": "Option-chain snapshot", "required": true },
-    { "name": "*watchlist*_raw.parquet", "description": "Macro / peer watch-list", "required": true },
-    { "name": "*predictions*.parquet",  "description": "TFT ensemble forecast",   "required": false }
+    {
+      "name": "*options*_raw.parquet",
+      "description": "Option-chain snapshot",
+      "required": true
+    },
+    {
+      "name": "*watchlist*_raw.parquet",
+      "description": "Macro / peer watch-list",
+      "required": true
+    },
+    {
+      "name": "*predictions*.parquet",
+      "description": "TFT ensemble forecast",
+      "required": false
+    }
   ],
+  "api_config": {
+    "polygon": {
+      "rate_limit": 5,
+      "rate_limit_unit": "second",
+      "timeout": 30,
+      "retry_attempts": 3,
+      "retry_delay": 1.0
+    }
+  },
+  "model_config": {
+    "tft": {
+      "model_path": "models/tft/best.ckpt",
+      "ensemble_models": ["models/tft/checkpoint_1.ckpt", "models/tft/checkpoint_2.ckpt"],
+      "quantiles": [0.1, 0.5, 0.9],
+      "prediction_horizon": 5,
+      "lookback_windows": [10, 30, 60],
+      "confidence_threshold": 0.6
+    }
+  },
+  "execution_config": {
+    "mode": "paper",
+    "dry_run": false,
+    "order_types": ["LIMIT"],
+    "slippage_bps": 5,
+    "commission_per_contract": 0.65,
+    "market_hours": {
+      "start": "09:30",
+      "end": "16:00",
+      "timezone": "America/New_York",
+      "early_close_days": ["2025-07-03", "2025-11-29", "2025-12-24"]
+    }
+  },
+  "risk_management": {
+    "portfolio_limits": {
+      "max_positions": 10,
+      "max_position_pct": 0.15,
+      "max_sector_pct": 0.30,
+      "margin_buffer": 0.25,
+      "buying_power_usage": 0.75
+    },
+    "greeks_limits": {
+      "portfolio_delta": {
+        "min": 0.60,
+        "max": 0.80,
+        "target": 0.70
+      },
+      "portfolio_gamma": {
+        "min": -0.10,
+        "max": 0.10
+      },
+      "portfolio_vega": {
+        "max": 1000
+      },
+      "portfolio_theta": {
+        "min": -500
+      }
+    },
+    "stop_loss": {
+      "enabled": true,
+      "trigger_pct": 2.0,
+      "trailing": false
+    },
+    "kill_switch": {
+      "daily_loss_limit": 5000,
+      "drawdown_limit": 0.15,
+      "consecutive_losses": 5
+    },
+    "kelly_criterion": {
+      "enabled": true,
+      "max_fraction": 0.25,
+      "safety_factor": 0.5
+    }
+  },
+  "alert_config": {
+    "channels": ["email", "slack"],
+    "thresholds": {
+      "position_assignment": true,
+      "position_expiry_days": 5,
+      "delta_breach": true,
+      "drawdown_pct": 0.10,
+      "sharpe_decline": 0.5,
+      "error_rate": 0.05
+    },
+    "quiet_hours": {
+      "start": "22:00",
+      "end": "06:00"
+    }
+  },
+  "monitoring": {
+    "metrics_interval": 60,
+    "performance_windows": [30, 60, 252],
+    "log_level": "INFO",
+    "log_retention_days": 90,
+    "parquet_retention_days": 365
+  },
+  "backtest_config": {
+    "start_date": "2023-01-01",
+    "end_date": "2024-12-31",
+    "initial_capital": 100000,
+    "commission_model": "per_contract",
+    "slippage_model": "fixed_bps",
+    "data_frequency": "1min"
+  },
   "custom_fields": {},
   "logic_version": "2025-05-21-alpha1",
   "prompt_config": {
@@ -29,13 +148,69 @@
       "option_mode": "LEG_BASED",
       "option_mode_notes": "LEG_BASED = scale by IVR ladder, then round down to the nearest whole contract. Migration from all-or-none: 2025-05-21. See changelog for rationale. entry_price is negative for credits (received), positive for debits (paid).",
       "roll_triggers": {
+        "time_value_threshold": 0.02,
+        "dte_threshold": 7,
+        "delta_threshold": 0.15,
+        "profit_target": 0.50,
+        "loss_limit": 2.0,
         "notes": "These values are referenced dynamically in roll_trigger_rules using @meta.roll_triggers.* syntax."
       },
       "ivr_ladder": [
-        { "min": 50, "max": null, "action": { "type": "scale", "factor": 1.0 }, "rounding": "down_to_int", "notes": "When IVR ≥ 50, use full share count." }
+        {
+          "min": 70,
+          "max": null,
+          "action": {
+            "type": "scale",
+            "factor": 1.30
+          },
+          "rounding": "down_to_int",
+          "notes": "When IVR ≥ 70, increase size by 30%"
+        },
+        {
+          "min": 50,
+          "max": 70,
+          "action": {
+            "type": "scale",
+            "factor": 1.0
+          },
+          "rounding": "down_to_int",
+          "notes": "When IVR 50-70, use full share count"
+        },
+        {
+          "min": 30,
+          "max": 50,
+          "action": {
+            "type": "scale",
+            "factor": 0.70
+          },
+          "rounding": "down_to_int",
+          "notes": "When IVR 30-50, reduce size by 30%"
+        },
+        {
+          "min": null,
+          "max": 30,
+          "action": {
+            "type": "scale",
+            "factor": 0.40
+          },
+          "rounding": "down_to_int",
+          "notes": "When IVR < 30, use 40% size or skip"
+        }
       ],
       "functions_catalogue": [
-        "abs", "multiply", "divide", "subtract", "percentile", "min", "max", "if", "all", "any"
+        "abs",
+        "multiply",
+        "divide",
+        "subtract",
+        "add",
+        "percentile",
+        "min",
+        "max",
+        "if",
+        "all",
+        "any",
+        "sqrt",
+        "log"
       ],
       "rule_precedence": ["catalyst", "delta", "extrinsic", "time"],
       "ivr_source": {
@@ -47,18 +222,90 @@
     "portfolio": {
       "cash": 41352.01,
       "equity": {
-        "cost_basis": 144914.67
+        "cost_basis": 144914.67,
+        "positions": {}
       },
-      "options": {…}
+      "options": {
+        "positions": {},
+        "total_contracts": 0,
+        "total_premium_collected": 0
+      }
     },
-    "options_template": { "$ref": "s3://bucket/path/to/options_template.json" },
+    "options_template": {
+      "$ref": "s3://bucket/path/to/options_template.json"
+    },
     "operating_logic": {
-      "position_manager_pass":
-        "For each short leg decide HOLD, ROLL, or BUY_BACK.",
+      "position_manager_pass": "For each short leg decide HOLD, ROLL, or BUY_BACK.",
       "post_resize_guards": [
+        {
+          "type": "max_position_size",
+          "value": "@sizing.max_size"
+        },
+        {
+          "type": "buying_power",
+          "value": "@risk_management.portfolio_limits.buying_power_usage"
+        }
       ],
       "roll_trigger_rules": [
-        { "condition": { "all": [ { "left": "time_value", "op": "<", "right": { "function": "multiply", "args": [0.02, "underlying_price"] } }, { "left": { "function": "abs", "args": [ { "function": "subtract", "args": ["spot", "strike"] } ] }, "op": "<", "right": { "function": "multiply", "args": [0.02, "underlying_price"] } } ] }, "action": { "type": "ROLL" }, "notes": "Synthetic-roll fence for any near-pin ITM call.", "priority": 5 }
+        {
+          "condition": {
+            "all": [
+              {
+                "left": "time_value",
+                "op": "<",
+                "right": {
+                  "function": "multiply",
+                  "args": ["@meta.roll_triggers.time_value_threshold", "underlying_price"]
+                }
+              },
+              {
+                "left": {
+                  "function": "abs",
+                  "args": [
+                    {
+                      "function": "subtract",
+                      "args": ["spot", "strike"]
+                    }
+                  ]
+                },
+                "op": "<",
+                "right": {
+                  "function": "multiply",
+                  "args": [0.02, "underlying_price"]
+                }
+              }
+            ]
+          },
+          "action": {
+            "type": "ROLL"
+          },
+          "notes": "Synthetic-roll fence for any near-pin ITM call.",
+          "priority": 5
+        },
+        {
+          "condition": {
+            "left": "dte",
+            "op": "<",
+            "right": "@meta.roll_triggers.dte_threshold"
+          },
+          "action": {
+            "type": "ROLL"
+          },
+          "notes": "Roll positions approaching expiry",
+          "priority": 10
+        },
+        {
+          "condition": {
+            "left": "profit_pct",
+            "op": ">",
+            "right": "@meta.roll_triggers.profit_target"
+          },
+          "action": {
+            "type": "BUY_BACK"
+          },
+          "notes": "Take profits at 50% of max profit",
+          "priority": 15
+        }
       ],
       "notes": "All roll_trigger_rules use expression objects for conditions. Dynamic references (e.g., @meta.roll_triggers.short_leg_delta_ceiling) are documented in meta. Each rule block includes a 'notes' field for maintainability. Rule order is determined by explicit 'priority' (lower = higher priority).",
       "size_throttle_by_ivr": {
@@ -68,14 +315,24 @@
         "note": "Rule precedence order is defined in meta.rule_precedence. This is a reference only; use meta.rule_precedence for actual logic."
       },
       "rule_precedence_note": "Within the same class, rules fire in array order.",
-      "disaster_put_rule":
-        "Apply Sharpe-based hedge decision; default one put for every two short puts when active.",
+      "disaster_put_rule": "Apply Sharpe-based hedge decision; default one put for every two short puts when active.",
       "extraordinary_scan_pass": {
         "max_contracts_per_leg": "shares"
       },
-      "override_precedence":
-        "override_trade supersedes all other rules, but share count caps still apply.",
-      "action_json_specs": {…}
+      "override_precedence": "override_trade supersedes all other rules, but share count caps still apply.",
+      "action_json_specs": {
+        "HOLD": {
+          "type": "no_action"
+        },
+        "ROLL": {
+          "type": "close_and_open",
+          "target_dte": 30,
+          "strike_selection": "delta_based"
+        },
+        "BUY_BACK": {
+          "type": "close_position"
+        }
+      }
     }
   },
   "meta": {
@@ -94,33 +351,98 @@
       "ask_lift_pct": "asks_at_bid_size / total_flow"
     },
     "certainty_ladder": [
-      { "min": 0.80, "max": 1.01, "scale": 1.30, "notes": "Very high confidence: oversize a bit" },
-      { "min": 0.60, "max": 0.80, "scale": 1.00, "notes": "Base size" },
-      { "min": 0.40, "max": 0.60, "scale": 0.70, "notes": "Cut size 30 %" },
-      { "min": null, "max": 0.40, "scale": 0.40, "notes": "Low confidence: half-size or avoid" }
+      {
+        "min": 0.80,
+        "max": 1.01,
+        "scale": 1.30,
+        "notes": "Very high confidence: oversize a bit"
+      },
+      {
+        "min": 0.60,
+        "max": 0.80,
+        "scale": 1.00,
+        "notes": "Base size"
+      },
+      {
+        "min": 0.40,
+        "max": 0.60,
+        "scale": 0.70,
+        "notes": "Cut size 30%"
+      },
+      {
+        "min": null,
+        "max": 0.40,
+        "scale": 0.40,
+        "notes": "Low confidence: half-size or avoid"
+      }
     ],
     "certainty_delta_shift": {
       "slope": 0.30,
       "notes": "Narrow delta target band as certainty rises; Δshift = slope × (certainty−0.5)"
+    },
+    "regime_detection": {
+      "lookback_days": 20,
+      "bull_threshold": 0.02,
+      "bear_threshold": -0.02,
+      "vol_expansion_threshold": 1.5
     }
   },
-  "file_ingest_expectations": {},
+  "file_ingest_expectations": {
+    "watchlist_columns": ["symbol", "last", "IV_rank_20d", "hist_vol_10d", "volume"],
+    "options_columns": ["strike", "bid", "ask", "delta", "gamma", "theta", "vega", "volume", "open_interest", "dte"]
+  },
   "rules": {
     "data_ingest_rules": {
       "max_csvs_per_run": 2,
-      "csv_files": [
-      ],
+      "csv_files": [],
       "load_and_validate": [
         "Times in the files are Eastern; output all timestamps as 'YYYY-MM-DD HH:MM ET'."
       ],
       "merging_with_live_data": "After CSV load, run fill_missing_with_live(live_fetcher_map) so every metric that has a fetcher is populated; CSV values always win when present.",
       "fail_safe_defaults": "If a required metric is still unavailable after live-fetch and AI lookup, compute a proxy if formula exists, else 'n/a' and append warning.",
       "mapping_to_output_sections": [
-        {"section": 5, "description": "greeks/P&L: leg-level greeks from options.csv; mark = mid(bid,ask) unless CSV provides mark."}
+        {
+          "section": 5,
+          "description": "greeks/P&L: leg-level greeks from options.csv; mark = mid(bid,ask) unless CSV provides mark."
+        }
       ],
       "performance": "Total load & parse time < 3 s; cache dataframe for reuse across sections.",
       "roll_trigger_rules": [
-        { "condition": { "all": [ { "left": "time_value", "op": "<", "right": { "function": "multiply", "args": [0.02, "underlying_price"] } }, { "left": { "function": "abs", "args": [ { "function": "subtract", "args": ["spot", "strike"] } ] }, "op": "<", "right": { "function": "multiply", "args": [0.02, "underlying_price"] } } ] }, "action": { "type": "ROLL" }, "notes": "Synthetic-roll fence for any near-pin ITM call.", "priority": 5 }
+        {
+          "condition": {
+            "all": [
+              {
+                "left": "time_value",
+                "op": "<",
+                "right": {
+                  "function": "multiply",
+                  "args": [0.02, "underlying_price"]
+                }
+              },
+              {
+                "left": {
+                  "function": "abs",
+                  "args": [
+                    {
+                      "function": "subtract",
+                      "args": ["spot", "strike"]
+                    }
+                  ]
+                },
+                "op": "<",
+                "right": {
+                  "function": "multiply",
+                  "args": [0.02, "underlying_price"]
+                }
+              }
+            ]
+          },
+          "action": {
+            "type": "ROLL"
+          },
+          "notes": "Synthetic-roll fence for any near-pin ITM call.",
+          "priority": 5
+        }
       ]
     }
   },
@@ -136,7 +458,35 @@
       "min_DTE": 7,
       "max_DTE": 45,
       "min_wheel_sharpe": 1.0,
-      "capital_at_risk_limit": 0.25
+      "capital_at_risk_limit": 0.25,
+      "strike_selection": {
+        "put_delta_target": -0.30,
+        "call_delta_target": 0.30,
+        "delta_range": 0.10
+      }
+    }
+  },
+  "feature_engineering": {
+    "technical_indicators": {
+      "rsi": {
+        "period": 14,
+        "overbought": 70,
+        "oversold": 30
+      },
+      "bollinger_bands": {
+        "period": 20,
+        "std_dev": 2
+      },
+      "macd": {
+        "fast": 12,
+        "slow": 26,
+        "signal": 9
+      }
+    },
+    "microstructure": {
+      "bid_ask_spread": true,
+      "volume_profile": true,
+      "order_flow_imbalance": true
     }
   }
 }

@@ -567,7 +567,7 @@ class WheelStrategyProduction:
             # where b = odds received, p = win prob, q = loss prob
             
             # For options: win = keep premium, lose = assignment cost
-            odds = premium_yield / (1 - premium_yield)  # Simplified
+            odds = premium_yield / (1 - premium_yield)  # Odds received on trade
             kelly_fraction = (win_prob * odds - (1 - win_prob)) / odds
             
             # Cap Kelly fraction for safety

@@ -33,6 +33,19 @@ class WheelOrchestrator:
     def __init__(self, config: Dict):
         self.config = config
         self.execution_history = []
+    
+    def is_market_open(self) -> bool:
+        """Check if US equity markets are open"""
+        import pytz
+        from datetime import time
+        
+        now = datetime.now(pytz.timezone('US/Eastern'))
+        # Market closed on weekends
+        if now.weekday() >= 5:
+            return False
+        # Regular trading hours: 9:30 AM - 4:00 PM ET
+        return time(9, 30) <= now.time() <= time(16, 0)
+    
     async def run_complete_cycle(self) -> Dict:
         pass  # Implement orchestration logic
     def _parse_option_chain(self, chain_data: list) -> list:
@@ -50,6 +63,9 @@ async def run_production_loop(config: Dict):
     orchestrator = WheelOrchestrator(config)
     while True:
         try:
+            if not orchestrator.is_market_open():
+                await asyncio.sleep(60)  # Check again in 1 minute
+                continue
             pass  # Implement loop logic
         except Exception as e:
             logger.error(f"Error in production loop: {e}")
